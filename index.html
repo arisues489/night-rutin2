@@ -198,6 +198,8 @@ navigator.clipboard.writeText(log)
 function resetToday(){
 if(confirm("今日の記録を消しますか？")){
 db[today]={items:[...defaultItems],records:{},plans:{}}
+date=db[today]
+activeId=null
 save();render()
 }
 }
