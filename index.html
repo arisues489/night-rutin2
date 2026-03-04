@@ -194,15 +194,16 @@ log+=fmt(r.start)+"-"+fmt(r.end)+"（"+dur+"分） "+data.items[i]+"\n"
 })
 navigator.clipboard.writeText(log)
 }
-
 function resetToday(){
-if(confirm("今日の記録を消しますか？")){
-db[today]={items:[...defaultItems],records:{},plans:{}}
-date=db[today]
-activeId=null
-save();render()
+  if(confirm("今日の記録を消しますか？")){
+    data.records = {};
+    data.plans = {};
+    activeId = null;
+    save();
+    render();
+  }
 }
-}
+
 
 render()
 setInterval(render,10000)
