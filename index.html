@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ナイトルーティン</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#0f1226}
+body{
+background:#0f1226;color:white;min-height:100vh;
+font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+}
+.container{max-width:520px;margin:auto;padding:20px 16px 160px}
+h1{font-size:22px;margin-bottom:6px}
+.clock{opacity:.6;font-size:13px;margin-bottom:12px}
+.progress{height:6px;background:#1b2045;border-radius:10px;overflow:hidden;margin-bottom:20px}
+.bar{height:100%;background:linear-gradient(90deg,#5c7cff,#7c8cff)}
+.item{background:#151938;border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer}
+.item.active{border:2px solid #7c8cff}
+.item.done{opacity:.6}
+.title{font-size:14px;margin-bottom:6px}
+.time{font-size:12px;opacity:.7;margin-bottom:4px}
+.plan{font-size:12px;opacity:.7;margin-top:4px}
+.editbtn{
+position:fixed;top:16px;right:16px;
+background:#22265a;border:none;padding:8px 12px;border-radius:8px;color:white;font-size:12px
+}
+.footer{
+position:fixed;bottom:0;left:0;right:0;
+background:#0f1226;border-top:1px solid #22265a;padding:10px;display:flex;gap:10px
+}
+button{padding:10px;border:none;border-radius:8px;background:#22265a;color:white;font-size:13px}
+.primary{background:linear-gradient(135deg,#5c7cff,#7c8cff)}
+.small{padding:4px 6px;font-size:11px;margin-right:4px}
+input{background:#22265a;border:none;color:white;padding:4px 6px;border-radius:6px;width:60px}
+.addBtn{width:100%;margin-top:10px}
+</style>
+</head>
+<body>
+
+<button class="editbtn" onclick="toggleEdit()">編集</button>
+
+<div class="container" id="app"></div>
+
+<div class="footer">
+<button class="primary" onclick="copyLog()">ログコピー</button>
+<button onclick="resetToday()">リセット</button>
+</div>
+
+<script>
+
+const defaultItems=[
+"帰宅後着替え","電源タップなど準備","ご飯","献立記録",
+"運動（軽め）","ストレッチ","自由時間",
+"お風呂準備","お風呂","お風呂片付け",
+"ヨーグルトなど","目疲れケア","軽いストレッチ・リラックス",
+"歯磨き準備","フロス","歯磨き","薬飲む","トイレ",
+"目薬・目薬2","寝る準備","寝る準備2",
+"見回り（窓・戸締り・電気・ガス）","充電","消灯"
+]
+
+const today=new Date().toISOString().slice(0,10)
+let db=JSON.parse(localStorage.getItem("nr_v4")||"{}")
+if(!db[today]) db[today]={items:[...defaultItems],records:{},plans:{}}
+let data=db[today]
+let editMode=false
+let activeId=null
+
+function save(){localStorage.setItem("nr_v4",JSON.stringify(db))}
+
+function fmt(t){
+const d=new Date(t)
+return d.getHours().toString().padStart(2,"0")+":"+
+d.getMinutes().toString().padStart(2,"0")
+}
+
+function duration(s,e){return Math.round((e-s)/60000)}
+
+function toggle(i){
+if(editMode) return
+if(activeId!==null && activeId!==i){
+const r=data.records[activeId]
+if(r && !r.end) r.end=Date.now()
+}
+let r=data.records[i]
+if(!r){
+data.records[i]={start:Date.now()}
+activeId=i
+}
+else if(!r.end){
+r.end=Date.now()
+activeId=null
+}
+else{
+delete data.records[i]
+}
+save();render()
+}
+
+function toggleEdit(){editMode=!editMode;render()}
+
+function move(i,dir){
+let t=i+dir
+if(t<0||t>=data.items.length)return
+[data.items[i],data.items[t]]=[data.items[t],data.items[i]]
+save();render()
+}
+
+function removeItem(i){
+data.items.splice(i,1)
+delete data.records[i]
+delete data.plans[i]
+save();render()
+}
+
+function addItem(){
+let name=prompt("追加する項目名")
+if(!name)return
+data.items.push(name)
+save();render()
+}
+
+function updatePlan(i,val){
+if(!val){delete data.plans[i]}
+else{data.plans[i]=parseInt(val)}
+save()
+}
+
+function render(){
+let done=Object.values(data.records).filter(r=>r.end).length
+let total=data.items.length
+
+let h=`<h1>ナイトルーティン</h1>
+<div class="clock">${fmt(Date.now())}</div>
+<div class="progress"><div class="bar" style="width:${done/total*100}%"></div></div>`
+
+data.items.forEach((item,i)=>{
+const r=data.records[i]
+const plan=data.plans[i]
+let cls="item"
+if(activeId===i) cls+=" active"
+if(r&&r.end) cls+=" done"
+
+h+=`<div class="${cls}" onclick="toggle(${i})">
+<div class="title">${item}</div>`
+
+if(r){
+if(r.end){
+let dur=duration(r.start,r.end)
+h+=`<div class="time">${fmt(r.start)} - ${fmt(r.end)}（${dur}分）</div>`
+if(plan){
+let diff=dur-plan
+let sign=diff>0?"＋":diff<0?"−":"±"
+h+=`<div class="plan">目安${plan}分 ｜ ${sign}${Math.abs(diff)}分</div>`
+}
+}else{
+h+=`<div class="time">実行中...</div>`
+}
+}
+
+if(editMode){
+h+=`<div class="plan">
+<button class="small" onclick="event.stopPropagation();move(${i},-1)">↑</button>
+<button class="small" onclick="event.stopPropagation();move(${i},1)">↓</button>
+<button class="small" onclick="event.stopPropagation();removeItem(${i})">削除</button>
+<br><br>
+目安：<input type="number" value="${plan||""}" 
+onchange="updatePlan(${i},this.value)"
+onclick="event.stopPropagation()">分
+</div>`
+}
+
+h+=`</div>`
+})
+
+if(editMode){
+h+=`<button class="addBtn" onclick="addItem()">＋ 項目を追加</button>`
+}
+
+document.getElementById("app").innerHTML=h
+}
+
+function copyLog(){
+let log="ナイトルーティン "+today+"\n\n"
+Object.entries(data.records)
+.filter(([_,r])=>r.end)
+.sort((a,b)=>a[1].start-b[1].start)
+.forEach(([i,r])=>{
+let dur=duration(r.start,r.end)
+log+=fmt(r.start)+"-"+fmt(r.end)+"（"+dur+"分） "+data.items[i]+"\n"
+})
+navigator.clipboard.writeText(log)
+}
+
+function resetToday(){
+if(confirm("今日の記録を消しますか？")){
+db[today]={items:[...defaultItems],records:{},plans:{}}
+save();render()
+}
+}
+
+render()
+setInterval(render,10000)
+
+</script>
+
+</body>
+</html>
